@@ -12,11 +12,17 @@ app.use(bodyParser.json());
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+app.use(express.static(path.resolve(process.cwd(), './public')));
+
 // OpenAI API configuration
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Default route to serve index.html for any undefined routes
+app.get('*', (req, res) => {
+    res.sendFile(path.resolve(process.cwd(), './public/index.html'));
+});
 // Dynamically import functions
 const importFunctions = async () => {
     const functionDir = path.join(__dirname, '../functions');
