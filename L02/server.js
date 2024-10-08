@@ -3,7 +3,7 @@ import bodyParser from 'body-parser';
 import { OpenAI} from 'openai';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { readdirSync } from 'fs';
+import fs from "fs";
 
 // Initialize Express server
 const app = express();
@@ -23,26 +23,32 @@ const openai = new OpenAI({
 app.get('*', (req, res) => {
     res.sendFile(path.resolve(process.cwd(), './public/index.html'));
 });
-// Dynamically import functions
-const importFunctions = async () => {
-    const functionDir = path.join(__dirname, '../functions');
-    const functionFiles = readdirSync(functionDir).filter(file => file.endsWith('.js'));
-    const functions = {};
+async function getFunctions() {
+   
+    const files = fs.readdirSync(path.resolve(process.cwd(), "./functions"));
+    const openAIFunctions = {};
 
-    for (const file of functionFiles) {
-        const { execute, details } = await import(path.join(functionDir, file));
-        functions[details.name] = { execute, details };
+    for (const file of files) {
+        if (file.endsWith(".js")) {
+            const moduleName = file.slice(0, -3);
+            const modulePath = `./functions/${moduleName}.js`;
+            const { details, execute } = await import(modulePath);
+
+            openAIFunctions[moduleName] = {
+                "details": details,
+                "execute": execute
+            };
+        }
     }
-
-    return functions;
-};
+    return openAIFunctions;
+}
 
 // Route to interact with OpenAI API
 app.post('/execute-function', async (req, res) => {
     const { functionName, parameters } = req.body;
 
     // Import all functions
-    const functions = await importFunctions();
+    const functions = await getFunctions();
 
     if (!functions[functionName]) {
         return res.status(404).json({ error: 'Function not found' });
@@ -51,6 +57,7 @@ app.post('/execute-function', async (req, res) => {
     try {
         // Call the function
         const result = await functions[functionName].execute(...Object.values(parameters));
+        console.log(`result: ${JSON.stringify(result)}`);
         res.json(result);
     } catch (err) {
         res.status(500).json({ error: 'Function execution failed', details: err.message });
